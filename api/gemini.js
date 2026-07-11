@@ -1,5 +1,7 @@
-export default async function handler(req, res) {
-  // Enable CORS
+import https from 'https';
+
+export default function handler(req, res) {
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -19,7 +21,7 @@ export default async function handler(req, res) {
   
   // Reconstruct query parameters
   const query = { ...req.query };
-  delete query.path; // Remove path parameter
+  delete query.path;
 
   const searchParams = new URLSearchParams();
   for (const [key, val] of Object.entries(query)) {
@@ -36,21 +38,36 @@ export default async function handler(req, res) {
   }
 
   const queryString = searchParams.toString();
-  const pathWithQuery = path + (queryString ? '?' + queryString : '');
-  const targetUrl = `https://generativelanguage.googleapis.com` + pathWithQuery;
+  const targetUrl = `https://generativelanguage.googleapis.com${path}${queryString ? '?' + queryString : ''}`;
 
-  try {
-    const response = await fetch(targetUrl, {
-      method: req.method,
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: req.method === 'POST' ? JSON.stringify(req.body) : undefined
-    });
+  const reqOpts = {
+    method: req.method,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  };
 
-    const data = await response.json();
-    return res.status(response.status).json(data);
-  } catch (e) {
-    return res.status(500).json({ error: { message: e.message } });
+  const proxyReq = https.request(targetUrl, reqOpts, (proxyRes) => {
+    // Forward status code
+    res.statusCode = proxyRes.statusCode || 200;
+    
+    // Forward relevant headers
+    if (proxyRes.headers['content-type']) {
+      res.setHeader('Content-Type', proxyRes.headers['content-type']);
+    }
+
+    // Pipe raw response stream directly to client
+    proxyRes.pipe(res);
+  });
+
+  proxyReq.on('error', (e) => {
+    res.status(500).json({ error: { message: e.message } });
+  });
+
+  // Write POST body if present
+  if (req.method === 'POST' && req.body) {
+    proxyReq.write(JSON.stringify(req.body));
   }
+  
+  proxyReq.end();
 }
