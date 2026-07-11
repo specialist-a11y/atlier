@@ -1,0 +1,17 @@
+{
+  "functions": {
+    "api/gemini/[...slug].js": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/gemini/:path*",
+      "destination": "/api/gemini/[...slug].js"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
