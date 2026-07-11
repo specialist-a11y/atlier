@@ -13,17 +13,13 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Parse wildcard path parameters from Vercel router
-  const slug = req.query.slug;
-  if (!slug || !Array.isArray(slug)) {
-    return res.status(400).json({ error: { message: 'Invalid Route: slug parameter is missing' } });
-  }
-
-  const path = '/' + slug.join('/');
+  // Parse path parameter forwarded by Vercel rewrite
+  const pathParam = req.query.path || '';
+  const path = '/' + pathParam;
   
   // Reconstruct query parameters
   const query = { ...req.query };
-  delete query.slug; // Remove slug array
+  delete query.path; // Remove path parameter
 
   const searchParams = new URLSearchParams();
   for (const [key, val] of Object.entries(query)) {
