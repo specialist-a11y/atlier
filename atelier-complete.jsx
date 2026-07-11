@@ -173,6 +173,7 @@ const CAT_FILL = {
 const uid = () => Math.random().toString(36).slice(2, 9);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const r1 = v => Math.round(v * 10) / 10;
+const shopSearchUrl = (query) => `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(query)}`;
 
 /* ---------------- AI helpers ---------------- */
 async function fetchWithGemini(endpoint, options) {
@@ -238,7 +239,7 @@ const Fld = ({ label, children }) => (
 const Spinner = () => <span className="spin" aria-hidden="true" />;
 
 /* ---------------- floor plan canvas ---------------- */
-function PlanCanvas({ room, furniture, setFurniture, selId, setSelId, svgRef }) {
+function PlanCanvas({ room, prefs, furniture, setFurniture, selId, setSelId, svgRef }) {
   const L = Math.max(1, +room.length || 4), W = Math.max(1, +room.width || 3);
   const scale = Math.min(680 / L, 440 / W);
   const pad = 34;
@@ -297,6 +298,7 @@ function PlanCanvas({ room, furniture, setFurniture, selId, setSelId, svgRef }) 
         {sorted.map(f => {
           const sel = f.id === selId;
           const fill = CAT_FILL[f.cat] || CAT_FILL.other;
+          const bx = pad+(f.x+f.w)*scale-8, by = pad+f.y*scale+8;
           return (
             <g key={f.id} className="fitem" onPointerDown={(e)=>down(e,f)}>
               <rect x={pad+f.x*scale} y={pad+f.y*scale} width={f.w*scale} height={f.h*scale} rx={f.cat==="plant"?f.w*scale/2:5}
@@ -306,6 +308,12 @@ function PlanCanvas({ room, furniture, setFurniture, selId, setSelId, svgRef }) 
               <text x={pad+(f.x+f.w/2)*scale} y={pad+(f.y+f.h/2)*scale+3} textAnchor="middle"
                     fontSize={Math.max(7.5, Math.min(11, f.w*scale/8))} fill="#fff" fontFamily="Karla" fontWeight="700"
                     style={{pointerEvents:"none",textShadow:"0 1px 2px rgba(0,0,0,.45)"}}>{f.name}</text>
+              <a href={shopSearchUrl(`${f.name} ${prefs?.style||""}`.trim())} target="_blank" rel="noreferrer"
+                 onPointerDown={e=>e.stopPropagation()}>
+                <title>Shop for {f.name}</title>
+                <circle cx={bx} cy={by} r={7} fill="#fff" stroke="var(--plan)" strokeWidth={1} strokeOpacity={0.6}/>
+                <text x={bx} y={by+3} textAnchor="middle" fontSize="9" fill="var(--brass)" fontWeight="700" style={{pointerEvents:"none"}}>$</text>
+              </a>
             </g>
           );
         })}
@@ -446,7 +454,7 @@ Rules: x,y are the TOP-LEFT corner in meters (x along the ${L}m side, y along th
           <p className="sub">Drag pieces to move them. Select a piece to rotate, keep or remove it. Gold dot = kept in AI re-plans.</p></div>
           <button className="btn primary" onClick={aiLayout} disabled={busy}>{busy?<><Spinner/> Designing…</>:"✦ AI layout"}</button>
         </div>
-        <PlanCanvas room={room} furniture={furniture} setFurniture={setFurniture} selId={selId} setSelId={setSelId} svgRef={svgRef}/>
+        <PlanCanvas room={room} prefs={prefs} furniture={furniture} setFurniture={setFurniture} selId={selId} setSelId={setSelId} svgRef={svgRef}/>
         <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap",alignItems:"center"}}>
           <select value={pick} onChange={e=>setPick(e.target.value)} style={{background:"var(--paper)",border:"1px solid var(--line)",borderRadius:10,padding:"8px 10px",color:"var(--ink)",font:"600 13px Karla"}}>
             {CATALOG.map(c=><option key={c.name}>{c.name}</option>)}
@@ -586,12 +594,17 @@ function ShopPanel({ room, prefs, shop, setShop }) {
                  style={{width:90,background:"var(--paper)",border:"1px solid var(--line)",borderRadius:10,padding:"7px 10px",color:"var(--ink)",font:"600 13px Karla"}}/>
         </div>
         <div style={{overflowX:"auto"}}>
-        <table className="tbl"><thead><tr><th>Category</th><th>Item</th><th>Colour / material</th><th>Note</th><th style={{textAlign:"right"}}>Price</th></tr></thead>
+        <table className="tbl"><thead><tr><th>Category</th><th>Item</th><th>Colour / material</th><th>Note</th><th style={{textAlign:"right"}}>Price</th><th></th></tr></thead>
           <tbody>{rows.map((i,k)=>(
             <tr key={k}><td>{i.category}</td><td style={{fontWeight:700}}>{i.sustainable?"♻ ":""}{i.name}</td>
             <td style={{color:"var(--muted)"}}>{[i.colour,i.material].filter(Boolean).join(" · ")}</td>
             <td style={{color:"var(--muted)",fontSize:13}}>{i.note}</td>
-            <td style={{textAlign:"right",fontWeight:700}}>${(+i.price||0).toLocaleString()}</td></tr>))}
+            <td style={{textAlign:"right",fontWeight:700}}>${(+i.price||0).toLocaleString()}</td>
+            <td style={{textAlign:"right"}}>
+              <a className="btn ghost" style={{padding:"5px 10px",fontSize:12,textDecoration:"none"}}
+                 href={shopSearchUrl([i.name,i.colour,i.material].filter(Boolean).join(" "))}
+                 target="_blank" rel="noreferrer">View ↗</a>
+            </td></tr>))}
           </tbody></table>
         </div>
         <div style={{textAlign:"right",marginTop:10,fontFamily:"Fraunces",fontSize:18}}>Total: ${total.toLocaleString()}</div>
@@ -1060,11 +1073,15 @@ function VisualisePanel({ room, prefs, furniture, mood, shop }) {
     return `Photorealistic interior design photograph of a ${roomDesc} ${concept}Furnished with: ${items || "curated designer furniture"}. Color palette: ${pal}. ${extras} Styling: ${budgetTier}. High-end editorial shoot, architectural digest style, clean lines, warm natural lighting, volumetric rays, 8k resolution, crisp details.`.replace(/\s+/g, " ").trim();
   }, [room, prefs, furniture, mood, shop]);
 
+  // Keep tracking the brief/floor plan/mood board/shopping list until the user
+  // manually edits the prompt themselves — otherwise later changes on those
+  // tabs would only show up here after a full page refresh.
+  const [promptTouched, setPromptTouched] = useState(false);
   useEffect(() => {
-    if (!customPrompt) {
+    if (!promptTouched) {
       setCustomPrompt(defaultPrompt);
     }
-  }, [defaultPrompt]);
+  }, [defaultPrompt, promptTouched]);
 
   // Sync state to local storage
   useEffect(() => { localStorage.setItem("atelier_render_mode", mode); }, [mode]);
@@ -1607,7 +1624,28 @@ function VisualisePanel({ room, prefs, furniture, mood, shop }) {
                       <button className="btn" style={{ marginTop: 8 }} onClick={() => regenerateSingle(selectedIdx)}>Retry Slot</button>
                     </div>
                   )}
+                  {activeRender.url && !activeRender.loading && !activeRender.error && furniture.filter(f => f.cat !== "rug").map(f => {
+                    const L = +room.length || 4, W = +room.width || 3;
+                    const leftPct = clamp(((f.x + f.w / 2) / L) * 100, 4, 96);
+                    const topPct = clamp(((f.y + f.h / 2) / W) * 100, 4, 96);
+                    return (
+                      <a key={f.id}
+                         href={shopSearchUrl(`${f.name} ${prefs.style || ""}`.trim())}
+                         target="_blank" rel="noreferrer"
+                         title={`Approximate position — shop for ${f.name}`}
+                         style={{
+                           position: "absolute", left: `${leftPct}%`, top: `${topPct}%`, transform: "translate(-50%,-50%)",
+                           width: 18, height: 18, borderRadius: "50%", background: "rgba(255,255,255,.92)",
+                           border: "1.5px solid var(--brass)", display: "flex", alignItems: "center", justifyContent: "center",
+                           fontSize: 10, fontWeight: 700, color: "var(--brass)", textDecoration: "none",
+                           boxShadow: "0 1px 4px rgba(0,0,0,.35)", cursor: "pointer"
+                         }}>$</a>
+                    );
+                  })}
                 </div>
+                {activeRender.url && !activeRender.loading && !activeRender.error && furniture.length > 0 && (
+                  <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>🛒 <b>$</b> markers show approximate item positions from your floor plan (not real object detection) — click one to shop for that piece.</p>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: "var(--muted)" }}>Option <b>#{selectedIdx + 1}</b> (Seed: {activeRender.seed})</span>
                   <div style={{ display: "flex", gap: 8 }}>
@@ -1648,7 +1686,7 @@ function VisualisePanel({ room, prefs, furniture, mood, shop }) {
                     <Fld label="AI Render Prompt (drawn from your brief, floor plan, mood board & shopping list — editing this updates all renders)">
                       <textarea
                         value={customPrompt}
-                        onChange={e => setCustomPrompt(e.target.value)}
+                        onChange={e => { setCustomPrompt(e.target.value); setPromptTouched(true); }}
                         rows={4}
                         style={{ width: "100%", resize: "vertical", fontSize: 13, fontFamily: "Karla", lineHeight: "1.4" }}
                       />
@@ -1725,7 +1763,7 @@ function VisualisePanel({ room, prefs, furniture, mood, shop }) {
 }
 
 /* ================= studio ================= */
-const TABS = ["Brief","Floor plan","Chat designer","Mood board","Shopping","Budget & score","Visualise","Export"];
+const TABS = ["Brief","Floor plan","Mood board","Shopping","Budget & score","Visualise","Export"];
 
 function Studio({ state, setState, onUpgrade, onHome }){
   const [tab,setTab]=useState("Brief");
@@ -1775,7 +1813,6 @@ function Studio({ state, setState, onUpgrade, onHome }){
         <div style={{display:tab==="Brief"?"block":"none"}}><BriefPanel room={proj.room} setRoom={setRoom} prefs={proj.prefs} setPrefs={setPrefs} go={()=>setTab("Floor plan")}/></div>
         <div style={{display:tab==="Floor plan"?"block":"none"}}><PlanPanel key={proj.id} room={proj.room} prefs={proj.prefs} furniture={proj.furniture} setFurniture={setFurniture} svgRef={svgRef}/></div>
         <div style={{display:tab==="Visualise"?"block":"none"}}><VisualisePanel key={proj.id} room={proj.room} prefs={proj.prefs} furniture={proj.furniture} mood={proj.mood} shop={proj.shop}/></div>
-        <div style={{display:tab==="Chat designer"?"block":"none"}}><ChatPanel key={proj.id} room={proj.room} prefs={proj.prefs} furniture={proj.furniture}/></div>
         <div style={{display:tab==="Mood board"?"block":"none"}}><MoodPanel room={proj.room} prefs={proj.prefs} mood={proj.mood} setMood={setMood}/></div>
         <div style={{display:tab==="Shopping"?"block":"none"}}><ShopPanel room={proj.room} prefs={proj.prefs} shop={proj.shop} setShop={setShop}/></div>
         <div style={{display:tab==="Budget & score"?"block":"none"}}><BudgetScorePanel room={proj.room} prefs={proj.prefs} furniture={proj.furniture} shop={proj.shop} aiTips={aiTips} setAiTips={setAiTips}/></div>
