@@ -938,7 +938,7 @@ function Checkout({ planKey, onDone, onCancel }){
 }
 
 /* ================= visualisation ================= */
-function VisualisePanel({ room, prefs, furniture }) {
+function VisualisePanel({ room, prefs, furniture, mood, shop }) {
   const [renders, setRenders] = useState([]); // Array of { seed, url, loading, error, errorMessage }
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [customPrompt, setCustomPrompt] = useState("");
@@ -1031,13 +1031,34 @@ function VisualisePanel({ room, prefs, furniture }) {
   };
 
   const defaultPrompt = useMemo(() => {
-    const pal = prefs.palette || "warm neutrals, natural oak, light linen";
     const style = prefs.style || "Japandi";
-    const items = furniture.filter(f => f.cat !== "rug").map(f => f.name.toLowerCase()).join(", ");
     const windowsStr = room.windows ? `, ${room.windows}` : ", large windows with soft morning light";
     const roomDesc = `${style} style ${room.type.toLowerCase()}, ${room.length}m x ${room.width}m with ${room.height}m ceilings${windowsStr}.`;
-    return `Photorealistic interior design photograph of a ${roomDesc} Furnished with: ${items || "curated designer furniture"}. Color palette: ${pal}. High-end editorial shoot, architectural digest style, clean lines, warm natural lighting, volumetric rays, 8k resolution, crisp details.`;
-  }, [room, prefs, furniture]);
+
+    // Prefer the shopping list (the actual pieces being bought) over the raw floor-plan catalog names
+    const items = shop && shop.length
+      ? shop.map(i => `${i.name}${i.colour ? ` (${i.colour})` : ""}`).join(", ")
+      : furniture.filter(f => f.cat !== "rug").map(f => f.name.toLowerCase()).join(", ");
+
+    // Prefer the mood board's designer palette/materials over the raw brief preference
+    const pal = mood?.palette?.length
+      ? mood.palette.map(c => `${c.name} (${c.hex})`).join(", ")
+      : (prefs.palette || "warm neutrals, natural oak, light linen");
+    const concept = mood?.concept ? `${mood.concept} ` : "";
+    const extras = [
+      mood?.materials?.length && `Materials: ${mood.materials.join(", ")}.`,
+      mood?.fabrics?.length && `Fabrics: ${mood.fabrics.join(", ")}.`,
+      mood?.lighting?.length && `Lighting: ${mood.lighting.join(", ")}.`,
+    ].filter(Boolean).join(" ");
+
+    // Reflect the room's budget tier as a styling cue
+    const spend = (shop||[]).reduce((s,i)=>s+(+i.price||0),0) || furniture.reduce((s,f)=>s+(f.price||0),0);
+    const budgetTier = prefs.budget > 0 && spend > prefs.budget
+      ? "cost-conscious styling, smart affordable finishes"
+      : "premium, considered high-end finishes";
+
+    return `Photorealistic interior design photograph of a ${roomDesc} ${concept}Furnished with: ${items || "curated designer furniture"}. Color palette: ${pal}. ${extras} Styling: ${budgetTier}. High-end editorial shoot, architectural digest style, clean lines, warm natural lighting, volumetric rays, 8k resolution, crisp details.`.replace(/\s+/g, " ").trim();
+  }, [room, prefs, furniture, mood, shop]);
 
   useEffect(() => {
     if (!customPrompt) {
@@ -1506,9 +1527,9 @@ function VisualisePanel({ room, prefs, furniture }) {
           <span style={{ fontSize: 48 }}>🖼️</span>
           <h3 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Render Visual Options</h3>
           <p style={{ color: "var(--muted)", fontSize: 14, margin: "0 0 10px", textAlign: "center", maxWidth: "44ch" }}>
-            {mode === "webhook" ? "Configure your webhook URL above, then click below to render." : mode === "gemini" ? "Configure your API key above, then click below to render." : mode === "unsplash" ? "Loads 10 high-end, curated Stock Photographs matching your room style & brief." : "Generate 10 custom photorealistic room concepts simultaneously. Choose your favorite, tweak prompts, and download the design."}
+            {mode === "webhook" ? "Configure your webhook URL above, then click below to render." : mode === "gemini" ? "Configure your API key above, then click below to render." : mode === "unsplash" ? `Loads ${renderCount} high-end, curated Stock Photographs matching your room style & brief.` : `Generate ${renderCount} custom photorealistic room concepts simultaneously, drawing on your brief, floor plan, mood board and shopping list. Choose your favorite, tweak prompts, and download the design.`}
           </p>
-          <button className="btn primary" onClick={generateAll}>✦ Render 10 visual options</button>
+          <button className="btn primary" onClick={generateAll}>✦ Render {renderCount} visual options</button>
         </div>
       ) : (
         <div style={{ display: "grid", gap: 20 }}>
@@ -1614,24 +1635,27 @@ function VisualisePanel({ room, prefs, furniture }) {
                   <div style={{ fontSize: 13, color: "var(--muted)", display: "grid", gap: 4 }}>
                     <div><b>Room:</b> {room.type} ({room.length}m × {room.width}m)</div>
                     <div><b>Style:</b> {prefs.style}</div>
-                    <div><b>Palette:</b> {prefs.palette || "Designer's choice"}</div>
+                    <div><b>Palette:</b> {mood?.palette?.length ? mood.palette.map(c=>c.name).join(", ") : (prefs.palette || "Designer's choice")}</div>
                     <div><b>Placed Furniture:</b> {furniture.length || "None"}</div>
+                    <div><b>Mood board:</b> {mood?.concept ? "Generated" : "Not generated yet"}</div>
+                    <div><b>Shopping list:</b> {shop?.length ? `${shop.length} items` : "Not generated yet"}</div>
+                    <div><b>Budget:</b> {prefs.budget ? `$${(+prefs.budget).toLocaleString()}` : "Not set"}</div>
                   </div>
                 </div>
 
                 {(mode === "ai" || mode === "webhook" || mode === "gemini") && (
                   <>
-                    <Fld label="AI Render Prompt (Modifying this updates all renders)">
-                      <textarea 
-                        value={customPrompt} 
-                        onChange={e => setCustomPrompt(e.target.value)} 
-                        rows={4} 
+                    <Fld label="AI Render Prompt (drawn from your brief, floor plan, mood board & shopping list — editing this updates all renders)">
+                      <textarea
+                        value={customPrompt}
+                        onChange={e => setCustomPrompt(e.target.value)}
+                        rows={4}
                         style={{ width: "100%", resize: "vertical", fontSize: 13, fontFamily: "Karla", lineHeight: "1.4" }}
                       />
                     </Fld>
-                    
+
                     <button className="btn primary" onClick={generateAll} style={{ width: "fit-content" }}>
-                      ✦ Apply prompt and render all 10 options
+                      ✦ Apply prompt and render all {renderCount} options
                     </button>
                   </>
                 )}
@@ -1639,7 +1663,7 @@ function VisualisePanel({ room, prefs, furniture }) {
             </div>
           )}
 
-          {/* Grid of 10 options */}
+          {/* Grid of render options */}
           <div style={{ marginTop: 10 }}>
             <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Choose a design variation:</h3>
             <div className="v-grid">
@@ -1701,7 +1725,7 @@ function VisualisePanel({ room, prefs, furniture }) {
 }
 
 /* ================= studio ================= */
-const TABS = ["Brief","Floor plan","Visualise","Chat designer","Mood board","Shopping","Budget & score","Export"];
+const TABS = ["Brief","Floor plan","Chat designer","Mood board","Shopping","Budget & score","Visualise","Export"];
 
 function Studio({ state, setState, onUpgrade, onHome }){
   const [tab,setTab]=useState("Brief");
@@ -1750,7 +1774,7 @@ function Studio({ state, setState, onUpgrade, onHome }){
       <div className="atl-main">
         <div style={{display:tab==="Brief"?"block":"none"}}><BriefPanel room={proj.room} setRoom={setRoom} prefs={proj.prefs} setPrefs={setPrefs} go={()=>setTab("Floor plan")}/></div>
         <div style={{display:tab==="Floor plan"?"block":"none"}}><PlanPanel key={proj.id} room={proj.room} prefs={proj.prefs} furniture={proj.furniture} setFurniture={setFurniture} svgRef={svgRef}/></div>
-        <div style={{display:tab==="Visualise"?"block":"none"}}><VisualisePanel key={proj.id} room={proj.room} prefs={proj.prefs} furniture={proj.furniture}/></div>
+        <div style={{display:tab==="Visualise"?"block":"none"}}><VisualisePanel key={proj.id} room={proj.room} prefs={proj.prefs} furniture={proj.furniture} mood={proj.mood} shop={proj.shop}/></div>
         <div style={{display:tab==="Chat designer"?"block":"none"}}><ChatPanel key={proj.id} room={proj.room} prefs={proj.prefs} furniture={proj.furniture}/></div>
         <div style={{display:tab==="Mood board"?"block":"none"}}><MoodPanel room={proj.room} prefs={proj.prefs} mood={proj.mood} setMood={setMood}/></div>
         <div style={{display:tab==="Shopping"?"block":"none"}}><ShopPanel room={proj.room} prefs={proj.prefs} shop={proj.shop} setShop={setShop}/></div>
