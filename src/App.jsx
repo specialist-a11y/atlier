@@ -199,7 +199,7 @@ async function askClaude(messages) {
     parts: [{ text: m.content }]
   }));
 
-  const res = await fetchWithGemini(`/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+  const res = await fetchWithGemini(`/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents }),
@@ -959,8 +959,8 @@ function VisualisePanel({ room, prefs, furniture }) {
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem("atelier_gemini_key") || "");
   const [geminiModel, setGeminiModel] = useState(() => {
     const saved = localStorage.getItem("atelier_gemini_model");
-    if (saved === "gemini-2.5-flash-image" || !saved) {
-      return "imagen-3.0-generate-002";
+    if (!saved || saved === "gemini-2.5-flash-image" || saved === "imagen-3.0-generate-002") {
+      return "imagen-4.0-generate-001";
     }
     return saved;
   });
@@ -977,14 +977,12 @@ function VisualisePanel({ room, prefs, furniture }) {
     setGeminiStatus("testing");
     setGeminiError("");
     try {
-      const res = await fetchWithGemini(`/v1beta/models/${geminiModel}:generateImages?key=${geminiApiKey}`, {
+      const res = await fetchWithGemini(`/v1beta/models/${geminiModel}:predict?key=${geminiApiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: { text: "A small succulent plant in a ceramic pot on a clean wooden desk, high quality photograph" },
-          numberOfImages: 1,
-          aspectRatio: "1:1",
-          outputMimeType: "image/jpeg"
+          instances: [{ prompt: "A small succulent plant in a ceramic pot on a clean wooden desk, high quality photograph" }],
+          parameters: { sampleCount: 1, aspectRatio: "1:1", outputOptions: { mimeType: "image/jpeg" } }
         })
       });
       if (!res.ok) {
@@ -992,7 +990,7 @@ function VisualisePanel({ room, prefs, furniture }) {
         throw new Error(errData.error?.message || `API returned ${res.status}`);
       }
       const data = await res.json();
-      const imageBytes = data.generatedImages?.[0]?.image?.imageBytes;
+      const imageBytes = data.predictions?.[0]?.bytesBase64Encoded;
       if (!imageBytes) throw new Error("No image data returned from Gemini API");
       setGeminiStatus("success");
     } catch (e) {
@@ -1187,14 +1185,12 @@ function VisualisePanel({ room, prefs, furniture }) {
 
   const generateSingleGemini = async (idx, seedVal, promptText) => {
     try {
-      const res = await fetchWithGemini(`/v1beta/models/${geminiModel}:generateImages?key=${geminiApiKey}`, {
+      const res = await fetchWithGemini(`/v1beta/models/${geminiModel}:predict?key=${geminiApiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: { text: `${promptText} (variation seed ${seedVal})` },
-          numberOfImages: 1,
-          aspectRatio: "4:3",
-          outputMimeType: "image/jpeg"
+          instances: [{ prompt: `${promptText} (variation seed ${seedVal})` }],
+          parameters: { sampleCount: 1, aspectRatio: "4:3", outputOptions: { mimeType: "image/jpeg" } }
         })
       });
       if (!res.ok) {
@@ -1202,7 +1198,7 @@ function VisualisePanel({ room, prefs, furniture }) {
         throw new Error(errData.error?.message || `API returned ${res.status}`);
       }
       const data = await res.json();
-      const imageBytes = data.generatedImages?.[0]?.image?.imageBytes;
+      const imageBytes = data.predictions?.[0]?.bytesBase64Encoded;
       if (!imageBytes) throw new Error("No image data returned from Gemini API");
       
       const url = `data:image/jpeg;base64,${imageBytes}`;
@@ -1476,7 +1472,7 @@ function VisualisePanel({ room, prefs, furniture }) {
               <input type="password" value={geminiApiKey} onChange={e => setGeminiApiKey(e.target.value)} placeholder="AIzaSy... (or leave blank to use backend variable)" />
             </Fld>
             <Fld label="Imagen Model Name">
-              <input value={geminiModel} onChange={e => setGeminiModel(e.target.value)} placeholder="imagen-3.0-generate-002" />
+              <input value={geminiModel} onChange={e => setGeminiModel(e.target.value)} placeholder="imagen-4.0-generate-001" />
             </Fld>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
               <button className="btn" style={{ padding: "6px 12px", fontSize: 12 }} onClick={testGeminiKey} disabled={geminiStatus === "testing"}>
