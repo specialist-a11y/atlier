@@ -175,15 +175,42 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const r1 = v => Math.round(v * 10) / 10;
 
 /* ---------------- AI helpers ---------------- */
+async function fetchWithGemini(endpoint, options) {
+  // 1. Try local dev server proxy first
+  try {
+    const res = await fetch(`/api/gemini` + endpoint, options);
+    if (res.status !== 404) return res;
+  } catch (err) {
+    // Failed (likely running on file:// or server not running)
+  }
+
+  // 2. Fallback to public CORS proxy
+  const googleUrl = `https://generativelanguage.googleapis.com` + endpoint;
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(googleUrl)}`;
+  return fetch(proxyUrl, options);
+}
+
 async function askClaude(messages) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const apiKey = localStorage.getItem("atelier_gemini_key") || "";
+  
+  // Format messages array to Gemini contents structure
+  const contents = messages.map(m => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }]
+  }));
+
+  const res = await fetchWithGemini(`/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages }),
+    body: JSON.stringify({ contents }),
   });
-  if (!res.ok) throw new Error("AI request failed (" + res.status + ")");
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error?.message || `AI request failed (${res.status})`);
+  }
   const data = await res.json();
-  return (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 }
 
 function parseJson(text) {
@@ -946,27 +973,11 @@ function VisualisePanel({ room, prefs, furniture }) {
   const [webhookStatus, setWebhookStatus] = useState(""); // "", "testing", "success", "error"
   const [webhookError, setWebhookError] = useState("");
 
-  const fetchWithProxy = async (endpoint, options) => {
-    // 1. Try local dev server proxy first
-    try {
-      const res = await fetch(`/api/gemini` + endpoint, options);
-      // If we got a response, return it (even if it's 400 invalid key, so we see the correct error message)
-      if (res.status !== 404) return res;
-    } catch (err) {
-      // Failed (likely running on file:// origin or server not running)
-    }
-
-    // 2. Fallback to public CORS proxy
-    const googleUrl = `https://generativelanguage.googleapis.com` + endpoint;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(googleUrl)}`;
-    return fetch(proxyUrl, options);
-  };
-
   const testGeminiKey = async () => {
     setGeminiStatus("testing");
     setGeminiError("");
     try {
-      const res = await fetchWithProxy(`/v1beta/models/${geminiModel}:generateImages?key=${geminiApiKey}`, {
+      const res = await fetchWithGemini(`/v1beta/models/${geminiModel}:generateImages?key=${geminiApiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1176,7 +1187,7 @@ function VisualisePanel({ room, prefs, furniture }) {
 
   const generateSingleGemini = async (idx, seedVal, promptText) => {
     try {
-      const res = await fetchWithProxy(`/v1beta/models/${geminiModel}:generateImages?key=${geminiApiKey}`, {
+      const res = await fetchWithGemini(`/v1beta/models/${geminiModel}:generateImages?key=${geminiApiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
