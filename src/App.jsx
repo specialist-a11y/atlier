@@ -920,7 +920,13 @@ function VisualisePanel({ room, prefs, furniture }) {
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   
   // Persistence settings
-  const [mode, setMode] = useState(() => localStorage.getItem("atelier_render_mode") || "ai");
+  const [mode, setMode] = useState(() => {
+    const saved = localStorage.getItem("atelier_render_mode");
+    if (saved === "ai" || saved === "picsum" || !saved) {
+      return "unsplash";
+    }
+    return saved;
+  });
   const [webhookUrl, setWebhookUrl] = useState(() => localStorage.getItem("atelier_webhook_url") || "");
   const [webhookAuth, setWebhookAuth] = useState(() => localStorage.getItem("atelier_webhook_auth") || "");
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem("atelier_gemini_key") || "");
@@ -931,7 +937,7 @@ function VisualisePanel({ room, prefs, furniture }) {
     }
     return saved;
   });
-  const [renderCount, setRenderCount] = useState(() => Number(localStorage.getItem("atelier_render_count")) || 3);
+  const renderCount = 3;
   const isFileProtocol = typeof window !== "undefined" && window.location.protocol === "file:";
 
   // Connection testing states
@@ -1038,7 +1044,6 @@ function VisualisePanel({ room, prefs, furniture }) {
   useEffect(() => { localStorage.setItem("atelier_webhook_auth", webhookAuth); }, [webhookAuth]);
   useEffect(() => { localStorage.setItem("atelier_gemini_key", geminiApiKey); }, [geminiApiKey]);
   useEffect(() => { localStorage.setItem("atelier_gemini_model", geminiModel); }, [geminiModel]);
-  useEffect(() => { localStorage.setItem("atelier_render_count", renderCount); }, [renderCount]);
 
   const getCuratedUnsplashUrl = (roomType, seedVal, index) => {
     // Curated high-end Unsplash interior design photos
@@ -1409,17 +1414,9 @@ function VisualisePanel({ room, prefs, furniture }) {
           <div>
             <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 6px 0", color: "var(--ink)" }}>Rendering Engine Settings</h3>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontWeight: mode === "ai" ? "700" : "500" }}>
-                <input type="radio" name="renderMode" checked={mode === "ai"} onChange={() => { setMode("ai"); setRenders([]); }} />
-                AI Render (Pollinations) [Free]
-              </label>
               <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontWeight: mode === "unsplash" ? "700" : "500" }}>
                 <input type="radio" name="renderMode" checked={mode === "unsplash"} onChange={() => { setMode("unsplash"); setRenders([]); }} />
                 Curated Stock (Unsplash) [Free] 🌟
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontWeight: mode === "picsum" ? "700" : "500" }}>
-                <input type="radio" name="renderMode" checked={mode === "picsum"} onChange={() => { setMode("picsum"); setRenders([]); }} />
-                Placeholder Vibe (Picsum) [Free]
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontWeight: mode === "webhook" ? "700" : "500" }}>
                 <input type="radio" name="renderMode" checked={mode === "webhook"} onChange={() => { setMode("webhook"); setRenders([]); }} />
@@ -1429,22 +1426,6 @@ function VisualisePanel({ room, prefs, furniture }) {
                 <input type="radio" name="renderMode" checked={mode === "gemini"} onChange={() => { setMode("gemini"); setRenders([]); }} />
                 Google Gemini API Key 🔑
               </label>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Renders to Generate:</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              {[3, 5, 10].map(count => (
-                <button 
-                  key={count} 
-                  className={`btn ${renderCount === count ? "primary" : "ghost"}`} 
-                  style={{ padding: "4px 12px", fontSize: 12, minWidth: 40 }}
-                  onClick={() => { setRenderCount(count); setRenders([]); }}
-                >
-                  {count}
-                </button>
-              ))}
             </div>
           </div>
         </div>

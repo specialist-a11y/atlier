@@ -13,22 +13,35 @@ export default async function handler(req, res) {
     return;
   }
 
-  const fullUrl = req.url || '';
-  const geminiIndex = fullUrl.indexOf('/api/gemini');
-  if (geminiIndex === -1) {
-    return res.status(400).json({ error: { message: 'Invalid API Route' } });
+  // Parse wildcard path parameters from Vercel router
+  const slug = req.query.slug;
+  if (!slug || !Array.isArray(slug)) {
+    return res.status(400).json({ error: { message: 'Invalid Route: slug parameter is missing' } });
   }
-  const pathWithQuery = fullUrl.substring(geminiIndex + 11);
+
+  const path = '/' + slug.join('/');
   
-  // Safe URL parsing
-  const urlObj = new URL(pathWithQuery, 'https://generativelanguage.googleapis.com');
-  
+  // Reconstruct query parameters
+  const query = { ...req.query };
+  delete query.slug; // Remove slug array
+
+  const searchParams = new URLSearchParams();
+  for (const [key, val] of Object.entries(query)) {
+    if (Array.isArray(val)) {
+      val.forEach(v => searchParams.append(key, v));
+    } else {
+      searchParams.set(key, val);
+    }
+  }
+
   // Inject server environment key if present
   if (process.env.GEMINI_API_KEY) {
-    urlObj.searchParams.set('key', process.env.GEMINI_API_KEY);
+    searchParams.set('key', process.env.GEMINI_API_KEY);
   }
-  
-  const targetUrl = urlObj.toString();
+
+  const queryString = searchParams.toString();
+  const pathWithQuery = path + (queryString ? '?' + queryString : '');
+  const targetUrl = `https://generativelanguage.googleapis.com` + pathWithQuery;
 
   try {
     const response = await fetch(targetUrl, {
