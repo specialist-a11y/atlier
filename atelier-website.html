@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atelier.ai — Your AI Interior Designer</title>
+<meta name="description" content="Design any room with an AI interior designer: intelligent floor plans, mood boards, shopping lists and budgets — in minutes.">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Karla:wght@400;500;600;700&display=swap');
+
+:root{
+  --bg:#F6F5F0; --card:#FFFFFF; --ink:#22261F; --muted:#6F7369; --line:#E4E2D8;
+  --sage:#5F7161; --sage-deep:#48584B; --sage-soft:#EAEFEA; --brass:#9C8248;
+  --paper:#FBFAF6; --plan:#2B2F29;
+  --shadow:0 1px 2px rgba(30,32,26,.05), 0 16px 40px -18px rgba(30,32,26,.18);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:'Karla',sans-serif;font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:'Fraunces',serif;font-weight:500;line-height:1.15}
+img{max-width:100%;display:block}
+a{color:inherit}
+.wrap{max-width:1140px;margin:0 auto;padding:0 24px}
+.eyebrow{font:700 11px 'Karla';letter-spacing:.14em;text-transform:uppercase;color:var(--brass)}
+
+/* nav */
+nav{position:sticky;top:0;z-index:50;background:rgba(246,245,240,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav-in{display:flex;align-items:center;gap:28px;padding:16px 24px;max-width:1140px;margin:0 auto}
+.logo{font-family:'Fraunces',serif;font-size:22px;text-decoration:none}
+.logo em{font-style:italic;color:var(--sage)}
+.nav-links{display:flex;gap:22px;margin-left:auto;align-items:center}
+.nav-links a{text-decoration:none;font:600 14px 'Karla';color:var(--muted);transition:color .15s}
+.nav-links a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--sage);color:#fff;border:none;font:700 15px 'Karla';padding:13px 24px;border-radius:12px;text-decoration:none;cursor:pointer;transition:all .2s;box-shadow:var(--shadow)}
+.btn:hover{background:var(--sage-deep);transform:translateY(-2px)}
+.btn.small{padding:9px 18px;font-size:13px}
+.btn.outline{background:transparent;color:var(--ink);border:1.5px solid var(--line);box-shadow:none}
+.btn.outline:hover{border-color:var(--sage);color:var(--sage-deep);background:var(--sage-soft)}
+
+/* hero */
+.hero{padding:72px 0 40px;display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center}
+.hero h1{font-size:clamp(38px,5.2vw,60px);margin:14px 0 18px}
+.hero h1 em{font-style:italic;color:var(--sage)}
+.hero p.lede{font-size:18px;color:var(--muted);max-width:46ch;margin-bottom:30px}
+.hero-ctas{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.hero-note{font-size:13px;color:var(--muted);margin-top:14px}
+.plan-frame{background:var(--paper);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:18px;position:relative}
+.plan-frame::after{content:'LIVING ROOM · 5.0 × 4.0 M · JAPANDI';position:absolute;bottom:26px;left:50%;transform:translateX(-50%);font:700 10px 'Karla';letter-spacing:.18em;color:var(--muted)}
+.plan-frame svg{width:100%;height:auto;display:block}
+
+/* draw-in animation */
+.draw{stroke-dasharray:1600;stroke-dashoffset:1600;animation:draw 2.2s .3s ease forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.pop{opacity:0;transform-origin:center;animation:pop .5s ease forwards}
+@keyframes pop{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+
+/* logos strip */
+.strip{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:22px 0;display:flex;gap:14px 44px;justify-content:center;flex-wrap:wrap;font:600 13px 'Karla';color:var(--muted)}
+.strip span{display:flex;align-items:center;gap:8px}
+.strip b{color:var(--sage-deep);font-family:'Fraunces',serif;font-size:17px;font-weight:500}
+
+/* sections */
+section{padding:84px 0}
+.sec-head{max-width:640px;margin:0 auto 52px;text-align:center}
+.sec-head h2{font-size:clamp(28px,3.6vw,40px);margin:12px 0 12px}
+.sec-head p{color:var(--muted)}
+
+/* features */
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.feat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px;box-shadow:var(--shadow);transition:transform .25s}
+.feat:hover{transform:translateY(-4px)}
+.feat .ico{width:46px;height:46px;border-radius:13px;background:var(--sage-soft);display:flex;align-items:center;justify-content:center;font-size:21px;margin-bottom:16px}
+.feat h3{font-size:19px;margin-bottom:8px}
+.feat p{font-size:14.5px;color:var(--muted)}
+
+/* gallery */
+.gal{display:grid;grid-template-columns:1.6fr 1fr;gap:18px}
+.frame{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:var(--shadow)}
+.frame img{border-radius:10px;width:100%;height:100%;object-fit:cover;aspect-ratio:16/10;background:var(--sage-soft)}
+.frame.tall img{aspect-ratio:3/4}
+.frame figcaption{padding:12px 6px 4px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.frame figcaption b{font-family:'Fraunces',serif;font-weight:500;font-size:16px}
+.frame figcaption span{font-size:12px;color:var(--muted)}
+
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;counter-reset:step}
+.step{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:28px 24px;position:relative}
+.step::before{counter-increment:step;content:counter(step,decimal-leading-zero);font-family:'Fraunces',serif;font-size:44px;color:var(--sage);opacity:.35;position:absolute;top:16px;right:20px;font-style:italic}
+.step h3{font-size:18px;margin-bottom:8px;max-width:80%}
+.step p{font-size:14.5px;color:var(--muted)}
+
+/* score band */
+.band{background:var(--sage-deep);color:#F2F4EF;border-radius:24px;padding:56px 48px;display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:center}
+.band h2{font-size:clamp(26px,3.2vw,36px);margin-bottom:14px}
+.band h2 em{font-style:italic;color:#CBB878}
+.band p{color:#C9D2C6;font-size:15.5px}
+.meters{display:grid;gap:16px}
+.meter label{display:flex;justify-content:space-between;font:700 12.5px 'Karla';letter-spacing:.04em;margin-bottom:6px}
+.meter .track{height:9px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden}
+.meter .fill{display:block;height:100%;border-radius:99px;background:#CBB878;width:0;transition:width 1.2s cubic-bezier(.2,.7,.2,1)}
+
+/* pricing */
+.price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:stretch}
+.price{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:30px 26px;box-shadow:var(--shadow);display:flex;flex-direction:column;position:relative}
+.price.hot{background:var(--sage-deep);color:#F2F4EF;border-color:var(--sage-deep);transform:scale(1.03)}
+.price.hot .p-desc,.price.hot li{color:#C9D2C6}
+.price.hot .p-amount small{color:#C9D2C6}
+.badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--brass);color:#fff;font:700 11px 'Karla';letter-spacing:.1em;text-transform:uppercase;padding:6px 14px;border-radius:99px;white-space:nowrap}
+.p-name{font-family:'Fraunces',serif;font-size:21px;margin-bottom:6px}
+.p-desc{font-size:13.5px;color:var(--muted);margin-bottom:18px;min-height:40px}
+.p-amount{font-family:'Fraunces',serif;font-size:44px;line-height:1;margin-bottom:22px}
+.p-amount small{font:600 13px 'Karla';color:var(--muted)}
+.price ul{list-style:none;display:grid;gap:10px;margin-bottom:26px;font-size:14px;color:var(--muted)}
+.price li::before{content:'✓  ';color:var(--brass);font-weight:700}
+.price li.no{opacity:.5}
+.price li.no::before{content:'—  '}
+.price .btn{margin-top:auto;justify-content:center}
+.price.hot .btn{background:#CBB878;color:#2B2F29}
+.price.hot .btn:hover{background:#DCCB90}
+.p-note{text-align:center;font-size:13px;color:var(--muted);margin-top:22px}
+@media(max-width:900px){.price-grid{grid-template-columns:1fr}.price.hot{transform:none}}
+
+/* cta */
+.cta{text-align:center;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:72px 32px;box-shadow:var(--shadow)}
+.cta h2{font-size:clamp(28px,4vw,44px);margin-bottom:14px}
+.cta h2 em{font-style:italic;color:var(--sage)}
+.cta p{color:var(--muted);max-width:52ch;margin:0 auto 30px}
+
+footer{border-top:1px solid var(--line);padding:34px 0 44px;display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:13.5px}
+
+/* reveal on scroll */
+.rv{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
+.rv.in{opacity:1;transform:none}
+
+@media(max-width:900px){
+  .hero{grid-template-columns:1fr;gap:36px;padding-top:48px}
+  .feat-grid,.steps{grid-template-columns:1fr 1fr}
+  .band{grid-template-columns:1fr;padding:40px 26px}
+  .gal{grid-template-columns:1fr}
+  .frame.tall img{aspect-ratio:16/10}
+}
+@media(max-width:600px){
+  .feat-grid,.steps{grid-template-columns:1fr}
+  .nav-links a:not(.btn){display:none}
+  section{padding:60px 0}
+}
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .rv{opacity:1;transform:none}
+  .draw{stroke-dashoffset:0}
+  .pop{opacity:1}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-in">
+    <a class="logo" href="#top">Atelier<em>.ai</em></a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#gallery">Gallery</a>
+      <a href="#how">How it works</a>
+      <a href="#pricing">Pricing</a>
+      <a class="btn small" href="#cta">Start designing</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero wrap" id="top">
+  <div>
+    <span class="eyebrow">AI Interior Design Studio</span>
+    <h1>Every room deserves <em>a designer.</em></h1>
+    <p class="lede">Atelier.ai turns your room's measurements into a professional design — an intelligent floor plan, a curated mood board, a shopping list that respects your budget, and a designer you can talk to. All in minutes.</p>
+    <div class="hero-ctas">
+      <a class="btn" href="#cta">Design my room — free</a>
+      <a class="btn outline" href="#how">See how it works</a>
+    </div>
+    <p class="hero-note">No account needed · Works on any device · 11 design styles</p>
+  </div>
+
+  <figure class="plan-frame" aria-label="Animated floor plan of a living room designed by AI">
+    <svg viewBox="0 0 460 360" xmlns="http://www.w3.org/2000/svg" role="img">
+      <!-- grid -->
+      <g stroke="#2B2F29" stroke-opacity=".07">
+        <line x1="105" y1="40" x2="105" y2="300"/><line x1="170" y1="40" x2="170" y2="300"/>
+        <line x1="235" y1="40" x2="235" y2="300"/><line x1="300" y1="40" x2="300" y2="300"/>
+        <line x1="365" y1="40" x2="365" y2="300"/>
+        <line x1="40" y1="105" x2="430" y2="105"/><line x1="40" y1="170" x2="430" y2="170"/>
+        <line x1="40" y1="235" x2="430" y2="235"/>
+      </g>
+      <!-- room outline draws itself -->
+      <rect class="draw" x="40" y="40" width="390" height="260" fill="none" stroke="#2B2F29" stroke-width="3"/>
+      <!-- window + door marks -->
+      <line class="pop" style="animation-delay:2.1s" x1="150" y1="40" x2="290" y2="40" stroke="#9C8248" stroke-width="6" stroke-linecap="round"/>
+      <path class="pop" style="animation-delay:2.2s" d="M430 210 A50 50 0 0 0 380 260" fill="none" stroke="#2B2F29" stroke-opacity=".4" stroke-width="1.5"/>
+      <!-- furniture -->
+      <g font-family="Karla, sans-serif" font-weight="700" fill="#fff" text-anchor="middle">
+        <g class="pop" style="animation-delay:2.35s">
+          <rect x="120" y="230" width="200" height="120" rx="6" fill="#C9C4B4" opacity=".55" transform="translate(0,-96)"/>
+        </g>
+        <g class="pop" style="animation-delay:2.5s">
+          <rect x="130" y="58" width="180" height="52" rx="7" fill="#5F7161"/>
+          <text x="220" y="89" font-size="13">SOFA</text>
+        </g>
+        <g class="pop" style="animation-delay:2.65s">
+          <rect x="175" y="168" width="90" height="40" rx="7" fill="#A98B62"/>
+          <text x="220" y="193" font-size="11">COFFEE</text>
+        </g>
+        <g class="pop" style="animation-delay:2.8s">
+          <rect x="64" y="120" width="52" height="52" rx="7" fill="#5F7161"/>
+          <text x="90" y="151" font-size="9.5">CHAIR</text>
+        </g>
+        <g class="pop" style="animation-delay:2.95s">
+          <rect x="150" y="252" width="150" height="34" rx="7" fill="#9C8248"/>
+          <text x="225" y="274" font-size="10.5">TV CONSOLE</text>
+        </g>
+        <g class="pop" style="animation-delay:3.1s">
+          <circle cx="398" cy="72" r="15" fill="#6E8F5E"/>
+          <text x="398" y="76" font-size="8.5">PLANT</text>
+        </g>
+        <g class="pop" style="animation-delay:3.25s">
+          <circle cx="70" cy="268" r="12" fill="#C7A94F"/>
+          <text x="70" y="272" font-size="7.5">LAMP</text>
+        </g>
+      </g>
+      <!-- dimensions -->
+      <g class="pop" style="animation-delay:3.4s" font-family="Karla" font-size="11" font-weight="700" fill="#6F7369">
+        <text x="235" y="326" text-anchor="middle">5.0 m</text>
+        <text x="452" y="174" text-anchor="middle" transform="rotate(90 452 174)">4.0 m</text>
+      </g>
+      <!-- AI badge -->
+      <g class="pop" style="animation-delay:3.6s">
+        <rect x="308" y="118" width="104" height="30" rx="15" fill="#2B2F29"/>
+        <text x="360" y="137" text-anchor="middle" font-family="Karla" font-size="11" font-weight="700" fill="#F2F4EF">✦ AI placed</text>
+      </g>
+    </svg>
+  </figure>
+</header>
+
+<div class="strip">
+  <span><b>11</b> design styles</span>
+  <span><b>0.75 m</b> walkway rule, always respected</span>
+  <span><b>7</b> optimisation scores</span>
+  <span><b>3</b> export formats</span>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">What's inside</span>
+      <h2>A full design studio, not just a chatbot</h2>
+      <p>Every tool reads your room's real dimensions and your brief — so the advice is specific, measured and buildable.</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat rv"><div class="ico">📐</div><h3>Intelligent floor plans</h3><p>The AI places furniture to scale on an architect-style plan — keeping walkways clear, honouring your doors and windows, and explaining its reasoning. Drag anything to make it yours.</p></div>
+      <div class="feat rv"><div class="ico">💬</div><h3>Chat with your designer</h3><p>"Can I fit a king-size bed?" "What curtains match?" Ask anything — the designer knows your exact room, furniture and budget, and answers with real measurements.</p></div>
+      <div class="feat rv"><div class="ico">🎨</div><h3>Instant mood boards</h3><p>A design concept, five paint-accurate colour swatches, materials, fabrics and lighting inspiration — generated from your style in seconds.</p></div>
+      <div class="feat rv"><div class="ico">🛒</div><h3>Budget-aware shopping</h3><p>A curated list that fits your budget, with brands you love, filterable by category and price. Sustainable picks are flagged.</p></div>
+      <div class="feat rv"><div class="ico">📊</div><h3>Space optimisation score</h3><p>Seven live scores — functionality, storage, lighting, comfort, traffic flow, style and budget — with AI recommendations to raise the weakest ones.</p></div>
+      <div class="feat rv"><div class="ico">📄</div><h3>Export everything</h3><p>Take away a design report, a shopping list and a to-scale floor plan file you can hand to a contractor — or a client.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="gallery" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">Visualise it</span>
+      <h2>From floor plan to photoreal</h2>
+      <p>Pair your Atelier plan with AI renders to see the finished room before you buy a single piece.</p>
+    </div>
+    <div class="gal">
+      <figure class="frame rv">
+        <img data-slot="hero-render" src="" alt="AI render — Japandi living room with oak sofa, sage limewash wall and soft morning light">
+        <figcaption><b>Japandi living room</b><span>Generated from the plan above</span></figcaption>
+      </figure>
+      <figure class="frame tall rv">
+        <img data-slot="bedroom-render" src="" alt="AI render — Japandi bedroom with low walnut bed and paper lantern lamp">
+        <figcaption><b>Japandi bedroom</b><span>Style-matched render</span></figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="how" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">How it works</span>
+      <h2>Three steps to a finished room</h2>
+    </div>
+    <div class="steps">
+      <div class="step rv"><h3>Brief your designer</h3><p>Room type, dimensions, windows and doors — then your style, palette, budget, household and storage needs. Two minutes, no jargon.</p></div>
+      <div class="step rv"><h3>Watch it take shape</h3><p>One tap places furniture to scale with designer's notes. Drag, rotate and pin the pieces you own — the AI plans around them.</p></div>
+      <div class="step rv"><h3>Shop &amp; share</h3><p>Generate the mood board and shopping list, check your scores, and export the report, plan and list — ready to buy or hand off.</p></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="band rv">
+      <div>
+        <span class="eyebrow" style="color:#CBB878">Space optimisation</span>
+        <h2>Your room, <em>scored</em> like a pro would.</h2>
+        <p>Atelier measures what designers feel by instinct — clearances, light, storage, flow — and turns it into scores you can actually improve. Ask "how do I raise this?" and get specific, budget-aware fixes.</p>
+      </div>
+      <div class="meters">
+        <div class="meter"><label><span>TRAFFIC FLOW</span><span>94</span></label><div class="track"><i class="fill" data-w="94%"></i></div></div>
+        <div class="meter"><label><span>LIGHTING</span><span>88</span></label><div class="track"><i class="fill" data-w="88%"></i></div></div>
+        <div class="meter"><label><span>STORAGE</span><span>81</span></label><div class="track"><i class="fill" data-w="81%"></i></div></div>
+        <div class="meter"><label><span>BUDGET EFFICIENCY</span><span>92</span></label><div class="track"><i class="fill" data-w="92%"></i></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">Pricing</span>
+      <h2>Your first room is on the house</h2>
+      <p>Design one complete room free — no card required. Fall in love with the result, then unlock the rest of your home.</p>
+    </div>
+    <div class="price-grid">
+      <div class="price rv">
+        <div class="p-name">First Room</div>
+        <p class="p-desc">Try the full studio on one room, start to finish.</p>
+        <div class="p-amount">Free <small>· one design, forever yours</small></div>
+        <ul>
+          <li>1 complete room design</li>
+          <li>AI floor plan &amp; designer chat</li>
+          <li>Mood board &amp; shopping list</li>
+          <li>Optimisation scores</li>
+          <li class="no">Exports (report, plan, CSV)</li>
+          <li class="no">Photoreal AI renders</li>
+        </ul>
+        <a class="btn outline" href="#" onclick="alert('Link to your app signup');return false">Design my free room</a>
+      </div>
+
+      <div class="price hot rv">
+        <span class="badge">Most popular</span>
+        <div class="p-name">Whole Home</div>
+        <p class="p-desc">Every room, every tool, unlimited redesigns.</p>
+        <div class="p-amount">$19 <small>/ month · cancel anytime</small></div>
+        <ul>
+          <li>Unlimited rooms &amp; redesigns</li>
+          <li>Everything in First Room</li>
+          <li>All exports — report, plan, CSV</li>
+          <li>Photoreal AI renders</li>
+          <li>Saved projects &amp; revisions</li>
+          <li>Priority AI responses</li>
+        </ul>
+        <a class="btn" href="#" onclick="alert('Link to your checkout');return false">Unlock my home</a>
+      </div>
+
+      <div class="price rv">
+        <div class="p-name">Single Room Pass</div>
+        <p class="p-desc">Just need one more room done properly? One payment, no subscription.</p>
+        <div class="p-amount">$9 <small>· per room, one-time</small></div>
+        <ul>
+          <li>1 additional room design</li>
+          <li>Unlimited revisions for 30 days</li>
+          <li>All exports for that room</li>
+          <li>2 photoreal AI renders</li>
+          <li class="no">Saved project library</li>
+        </ul>
+        <a class="btn outline" href="#" onclick="alert('Link to your checkout');return false">Buy a room pass</a>
+      </div>
+    </div>
+    <p class="p-note">Prices in USD. Your free room never expires — take your time with it.</p>
+  </div>
+</section>
+
+<section id="cta" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta rv">
+      <span class="eyebrow">Ready when you are</span>
+      <h2>Stop guessing. <em>Start designing.</em></h2>
+      <p>Your first room is free — describe it, and have a complete design with plan, palette, list and budget before your coffee goes cold.</p>
+      <a class="btn" href="#" onclick="alert('Link this button to your Atelier.ai app URL');return false">Design my free room</a>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <span>© 2026 Atelier.ai — an AI interior design studio.</span>
+  <span>Crafted in Barbados 🌴 by ZDMINC</span>
+</footer>
+
+<script>
+/* ---- paste your Higgsfield render URLs here ---- */
+const RENDERS = {
+  "hero-render": "",     // 16:9 living room render URL
+  "bedroom-render": ""   // 3:4 bedroom render URL
+};
+document.querySelectorAll("img[data-slot]").forEach(img => {
+  const url = RENDERS[img.dataset.slot];
+  if (url) { img.src = url; }
+  else {
+    /* elegant placeholder until a URL is pasted */
+    const ph = encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='800' height='500'><rect width='100%' height='100%' fill='#EAEFEA'/><text x='50%' y='48%' text-anchor='middle' font-family='Georgia' font-style='italic' font-size='22' fill='#5F7161'>Render loading…</text><text x='50%' y='56%' text-anchor='middle' font-family='sans-serif' font-size='12' fill='#6F7369'>Paste your Higgsfield image URL in the RENDERS config</text></svg>`);
+    img.src = "data:image/svg+xml," + ph;
+  }
+});
+
+/* reveal on scroll */
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+}), { threshold: .12 });
+document.querySelectorAll(".rv").forEach(el => io.observe(el));
+
+/* animate score meters when visible */
+const mo = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) {
+    e.target.querySelectorAll(".fill").forEach(f => f.style.width = f.dataset.w);
+    mo.unobserve(e.target);
+  }
+}), { threshold: .3 });
+document.querySelectorAll(".band").forEach(el => mo.observe(el));
+</script>
+</body>
+</html>
