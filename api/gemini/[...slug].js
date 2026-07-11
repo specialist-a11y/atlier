@@ -13,9 +13,12 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Extract path and query parameters
   const fullUrl = req.url || '';
-  const pathWithQuery = fullUrl.replace(/^\/api\/gemini/, '');
+  const geminiIndex = fullUrl.indexOf('/api/gemini');
+  if (geminiIndex === -1) {
+    return res.status(400).json({ error: { message: 'Invalid API Route' } });
+  }
+  const pathWithQuery = fullUrl.substring(geminiIndex + 11);
   
   // Safe URL parsing
   const urlObj = new URL(pathWithQuery, 'https://generativelanguage.googleapis.com');
