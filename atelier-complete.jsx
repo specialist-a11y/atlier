@@ -21,7 +21,8 @@ const CSS = `
   --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -14px rgba(0,0,0,.6);
 }
 *{box-sizing:border-box}
-.atl{min-height:100vh;background:var(--bg);color:var(--ink);font-family:'Karla',sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;transition:background .3s,color .3s}
+html,body{overflow-x:hidden;max-width:100%}
+.atl{min-height:100vh;background:var(--bg);color:var(--ink);font-family:'Karla',sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;transition:background .3s,color .3s;overflow-x:hidden}
 .atl h1,.atl h2,.atl h3{font-family:'Fraunces',serif;font-weight:500;margin:0}
 .atl-top{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:20}
 .atl-logo{font-family:'Fraunces',serif;font-size:20px;letter-spacing:.02em}
@@ -39,6 +40,16 @@ const CSS = `
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 @media(max-width:760px){.grid2,.grid3{grid-template-columns:1fr}.atl-main{padding:14px 10px 90px}}
+@media(max-width:480px){
+  .atl-top{padding:10px 14px;gap:10px}
+  .atl-roomname{display:none}
+  .atl-logo{font-size:18px}
+  .atl-tabs{padding:8px 10px 0}
+  .atl-tab{padding:9px 11px;font-size:12.5px}
+  .card{padding:16px}
+  .btn{padding:10px 14px}
+  .chip{padding:9px 14px}
+}
 .fld{display:flex;flex-direction:column;gap:5px}
 .fld label{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .fld input,.fld select,.fld textarea{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:500 14px 'Karla';color:var(--ink);outline:none;transition:border .15s}
@@ -212,6 +223,41 @@ async function askClaude(messages) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 }
 
+async function askGeminiVision(prompt, imageBase64, mimeType, apiKey) {
+  const res = await fetchWithGemini(`/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey || ""}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType, data: imageBase64 } }] }],
+    }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error?.message || `AI request failed (${res.status})`);
+  }
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+async function urlToBase64(url) {
+  if (url.startsWith("data:")) {
+    const match = /^data:(.+?);base64,(.+)$/.exec(url);
+    if (!match) throw new Error("Unsupported image format for analysis");
+    return { mimeType: match[1], data: match[2] };
+  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Couldn't load image for analysis (${res.status})`);
+  const blob = await res.blob();
+  const mimeType = blob.type || "image/jpeg";
+  const data = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = () => reject(new Error("Couldn't read image data"));
+    reader.readAsDataURL(blob);
+  });
+  return { mimeType, data };
+}
+
 function parseJson(text) {
   const clean = text.replace(/```json|```/g, "").trim();
   const s = Math.min(...["{", "["].map(c => { const i = clean.indexOf(c); return i === -1 ? Infinity : i; }));
@@ -342,9 +388,54 @@ function computeScores(room, prefs, furniture) {
 }
 
 /* ---------------- panels ---------------- */
-function BriefPanel({ room, setRoom, prefs, setPrefs, go }) {
+function BriefPanel({ room, setRoom, prefs, setPrefs, photo, setPhoto, go }) {
   const set = k => e => setRoom(r => ({ ...r, [k]: e.target.value }));
   const setP = k => e => setPrefs(p => ({ ...p, [k]: e.target.value }));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const onFile = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setErr("");
+    const reader = new FileReader();
+    reader.onload = () => {
+      // Downscale/compress client-side — raw phone photos are several MB and
+      // would blow the localStorage quota once saved with the rest of the project.
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1280;
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        setPhoto({ dataUrl: canvas.toDataURL("image/jpeg", 0.82), tips: null });
+      };
+      img.onerror = () => setErr("Couldn't read that image — try a different file.");
+      img.src = reader.result;
+    };
+    reader.onerror = () => setErr("Couldn't read that image — try a different file.");
+    reader.readAsDataURL(file);
+  };
+
+  const analyzePhoto = async () => {
+    if (!photo?.dataUrl) return;
+    setBusy(true); setErr("");
+    try {
+      const match = /^data:(.+?);base64,(.+)$/.exec(photo.dataUrl);
+      if (!match) throw new Error("Unsupported image format");
+      const [, mimeType, data] = match;
+      const prompt = `You are a professional interior designer. Here is a photo of the client's CURRENT room, as it looks today.\n${roomBrief(room, prefs)}\n\nLooking at what's actually in the photo, give exactly 6 specific, prioritized recommendations to optimize this real room for the client's stated style, budget and household — cover things like clutter, furniture placement, traffic flow, lighting, colour/style mismatches, and storage. Reference what you can actually see. Respond with plain text, one recommendation per line, no numbering or markdown headers.`;
+      const text = await askGeminiVision(prompt, data, mimeType, localStorage.getItem("atelier_gemini_key") || "");
+      setPhoto(p => ({ ...p, tips: text.trim() }));
+    } catch (e) {
+      setErr("Couldn't analyze this photo — try again. (" + e.message + ")");
+    }
+    setBusy(false);
+  };
+
   return (
     <div className="fade" style={{display:"grid",gap:18}}>
       <div className="card">
@@ -391,6 +482,33 @@ function BriefPanel({ room, setRoom, prefs, setPrefs, go }) {
           <button className={"chip"+(prefs.pets?" on":"")} onClick={()=>setPrefs(p=>({...p,pets:!p.pets}))}>🐾 Pets{prefs.pets?" — yes":""}</button>
           <button className={"chip"+(prefs.children?" on":"")} onClick={()=>setPrefs(p=>({...p,children:!p.children}))}>🧒 Children{prefs.children?" — yes":""}</button>
         </div>
+      </div>
+
+      <div className="card">
+        <span className="tag">Step 3 — Optional</span>
+        <h2>Your current room</h2>
+        <p className="sub">Upload a photo of the room as it looks today and the AI will point out specific ways to optimize it — clutter, layout, lighting, storage and style.</p>
+        <div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-start"}}>
+          {photo?.dataUrl && (
+            <img src={photo.dataUrl} alt="Your current room" style={{width:"100%",maxWidth:260,borderRadius:12,border:"1px solid var(--line)",display:"block"}}/>
+          )}
+          <div style={{display:"grid",gap:10,flex:1,minWidth:220}}>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <label className="btn" style={{cursor:"pointer"}}>
+                📷 {photo?.dataUrl?"Change photo":"Upload a photo"}
+                <input type="file" accept="image/*" onChange={onFile} style={{display:"none"}}/>
+              </label>
+              {photo?.dataUrl && (
+                <button className="btn primary" onClick={analyzePhoto} disabled={busy}>{busy?<><Spinner/> Analysing…</>:"✦ Analyze my room"}</button>
+              )}
+              {photo?.dataUrl && (
+                <button className="btn ghost" style={{color:"var(--danger)"}} onClick={()=>setPhoto(null)}>Remove</button>
+              )}
+            </div>
+            {err && <div className="notice warn">{err}</div>}
+            {photo?.tips && <div className="notice" style={{whiteSpace:"pre-wrap"}}>{photo.tips}</div>}
+          </div>
+        </div>
         <div style={{marginTop:18}}>
           <button className="btn primary" onClick={go}>Continue to floor plan →</button>
         </div>
@@ -399,7 +517,7 @@ function BriefPanel({ room, setRoom, prefs, setPrefs, go }) {
   );
 }
 
-function PlanPanel({ room, prefs, furniture, setFurniture, svgRef }) {
+function PlanPanel({ room, prefs, furniture, setFurniture, photo, svgRef }) {
   const [selId, setSelId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [tips, setTips] = useState([]);
@@ -424,7 +542,7 @@ function PlanPanel({ room, prefs, furniture, setFurniture, svgRef }) {
       const prompt = `You are a professional interior designer planning furniture placement.
 ${roomBrief(room, prefs)}
 ${furnitureBrief(furniture)}
-
+${photo?.tips ? `\nNOTES FROM THE CLIENT'S CURRENT ROOM PHOTO:\n${photo.tips}\n` : ""}
 Design an optimal furniture layout for this ${room.type}. Follow interior design best practice: keep walkways of at least 0.75m, don't block the doors/windows described, respect any [KEEP] items exactly as placed, favour natural light, avoid overcrowding, and suit the client's style and household (pets/children/accessibility). Choose furniture pieces from this catalog only (name, width x depth in meters): ${CATALOG.map(c=>`${c.name} ${c.w}x${c.h}`).join("; ")}. You may include a rug and plants where appropriate.
 
 Respond with ONLY valid JSON, no markdown, in this exact shape:
@@ -730,7 +848,7 @@ const newProject = (n=1) => ({
   id: uid(), name: "Room "+n, createdAt: Date.now(),
   room: {type:"Living Room",name:"",length:5,width:4,height:2.7,ceiling:"Flat",windows:"",doors:"",builtIns:""},
   prefs: {style:"Japandi",palette:"",budget:5000,occupants:2,storage:"Moderate",accessibility:"",brands:"",pets:false,children:false},
-  furniture: [], mood: null, shop: null,
+  furniture: [], mood: null, shop: null, photo: null,
 });
 
 const storage = window.storage || {
@@ -956,6 +1074,7 @@ function VisualisePanel({ room, prefs, furniture, mood, shop }) {
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [customPrompt, setCustomPrompt] = useState("");
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [detections, setDetections] = useState({}); // idx -> { status: "loading"|"done"|"error", items?, error? }
   
   // Persistence settings
   const [mode, setMode] = useState(() => {
@@ -1273,6 +1392,7 @@ function VisualisePanel({ room, prefs, furniture, mood, shop }) {
 
 
     setIsGeneratingAll(true);
+    setDetections({});
     const items = Array.from({ length: renderCount }).map((_, idx) => {
       const seed = Math.floor(Math.random() * 1000000) + idx;
       return {
@@ -1297,7 +1417,8 @@ function VisualisePanel({ room, prefs, furniture, mood, shop }) {
   const regenerateSingle = (idx) => {
     const p = customPrompt.trim() || defaultPrompt;
     const seed = Math.floor(Math.random() * 1000000) + idx;
-    
+
+    setDetections(d => { const copy = { ...d }; delete copy[idx]; return copy; });
     setRenders(prev => {
       const copy = [...prev];
       copy[idx] = {
@@ -1346,6 +1467,22 @@ function VisualisePanel({ room, prefs, furniture, mood, shop }) {
       }
       return copy;
     });
+  };
+
+  const detectItems = async (idx) => {
+    const item = renders[idx];
+    if (!item?.url) return;
+    setDetections(d => ({ ...d, [idx]: { status: "loading" } }));
+    try {
+      const { mimeType, data } = await urlToBase64(item.url);
+      const names = furniture.map(f => f.name);
+      const prompt = `This is a photo of a ${room.type.toLowerCase()}. Identify which of these specific items are visible: ${names.join(", ") || "furniture and decor"}. Respond with ONLY a JSON array, no markdown: [{"name":"<exact item name from the list>","box_2d":[ymin,xmin,ymax,xmax]}]. box_2d values are integers 0-1000, normalized to the image height/width with the origin at the top-left. Only include items you can actually see in the photo; skip ones you can't find, and don't invent extra items.`;
+      const text = await askGeminiVision(prompt, data, mimeType, geminiApiKey);
+      const items = parseJson(text);
+      setDetections(d => ({ ...d, [idx]: { status: "done", items: Array.isArray(items) ? items : [] } }));
+    } catch (e) {
+      setDetections(d => ({ ...d, [idx]: { status: "error", error: e.message } }));
+    }
   };
 
   const download = async (url, seedVal) => {
@@ -1456,7 +1593,7 @@ function VisualisePanel({ room, prefs, furniture, mood, shop }) {
         <div className="notice" style={{ background: "var(--paper)", display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
             <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 6px 0", color: "var(--ink)" }}>Rendering Engine Settings</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, fontSize: 13 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontWeight: mode === "unsplash" ? "700" : "500" }}>
                 <input type="radio" name="renderMode" checked={mode === "unsplash"} onChange={() => { setMode("unsplash"); setRenders([]); }} />
                 Curated Stock (Unsplash) [Free] 🌟
@@ -1624,27 +1761,48 @@ function VisualisePanel({ room, prefs, furniture, mood, shop }) {
                       <button className="btn" style={{ marginTop: 8 }} onClick={() => regenerateSingle(selectedIdx)}>Retry Slot</button>
                     </div>
                   )}
-                  {activeRender.url && !activeRender.loading && !activeRender.error && furniture.filter(f => f.cat !== "rug").map(f => {
-                    const L = +room.length || 4, W = +room.width || 3;
-                    const leftPct = clamp(((f.x + f.w / 2) / L) * 100, 4, 96);
-                    const topPct = clamp(((f.y + f.h / 2) / W) * 100, 4, 96);
-                    return (
-                      <a key={f.id}
-                         href={shopSearchUrl(`${f.name} ${prefs.style || ""}`.trim())}
-                         target="_blank" rel="noreferrer"
-                         title={`Approximate position — shop for ${f.name}`}
-                         style={{
-                           position: "absolute", left: `${leftPct}%`, top: `${topPct}%`, transform: "translate(-50%,-50%)",
-                           width: 18, height: 18, borderRadius: "50%", background: "rgba(255,255,255,.92)",
-                           border: "1.5px solid var(--brass)", display: "flex", alignItems: "center", justifyContent: "center",
-                           fontSize: 10, fontWeight: 700, color: "var(--brass)", textDecoration: "none",
-                           boxShadow: "0 1px 4px rgba(0,0,0,.35)", cursor: "pointer"
-                         }}>$</a>
-                    );
-                  })}
+                  {activeRender.url && !activeRender.loading && !activeRender.error && detections[selectedIdx]?.status === "done" &&
+                    detections[selectedIdx].items.map((it, i) => {
+                      const [ymin, xmin, ymax, xmax] = it.box_2d || [];
+                      if ([ymin, xmin, ymax, xmax].some(v => typeof v !== "number")) return null;
+                      const leftPct = ((xmin + xmax) / 2) / 10;
+                      const topPct = ((ymin + ymax) / 2) / 10;
+                      const match = furniture.find(f => f.name.toLowerCase() === (it.name || "").toLowerCase());
+                      return (
+                        <a key={i}
+                           href={shopSearchUrl(`${match ? match.name : it.name} ${prefs.style || ""}`.trim())}
+                           target="_blank" rel="noreferrer"
+                           title={`Shop for ${it.name}`}
+                           style={{
+                             position: "absolute", left: `${leftPct}%`, top: `${topPct}%`, transform: "translate(-50%,-50%)",
+                             width: 18, height: 18, borderRadius: "50%", background: "rgba(255,255,255,.92)",
+                             border: "1.5px solid var(--brass)", display: "flex", alignItems: "center", justifyContent: "center",
+                             fontSize: 10, fontWeight: 700, color: "var(--brass)", textDecoration: "none",
+                             boxShadow: "0 1px 4px rgba(0,0,0,.35)", cursor: "pointer"
+                           }}>$</a>
+                      );
+                    })}
                 </div>
-                {activeRender.url && !activeRender.loading && !activeRender.error && furniture.length > 0 && (
-                  <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>🛒 <b>$</b> markers show approximate item positions from your floor plan (not real object detection) — click one to shop for that piece.</p>
+                {activeRender.url && !activeRender.loading && !activeRender.error && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    {(!detections[selectedIdx] || detections[selectedIdx].status === "error") && (
+                      <button className="btn ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => detectItems(selectedIdx)}>
+                        🔍 Find shoppable items in this photo
+                      </button>
+                    )}
+                    {detections[selectedIdx]?.status === "loading" && (
+                      <span style={{ fontSize: 12, color: "var(--muted)" }}><Spinner /> Analysing photo…</span>
+                    )}
+                    {detections[selectedIdx]?.status === "error" && (
+                      <span style={{ fontSize: 12, color: "var(--danger)" }}>Couldn't analyse this photo ({detections[selectedIdx].error})</span>
+                    )}
+                    {detections[selectedIdx]?.status === "done" && detections[selectedIdx].items.length > 0 && (
+                      <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>🛒 <b>$</b> markers found in this photo — click one to shop for that piece.</p>
+                    )}
+                    {detections[selectedIdx]?.status === "done" && detections[selectedIdx].items.length === 0 && (
+                      <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>No matching items found in this photo.</p>
+                    )}
+                  </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: "var(--muted)" }}>Option <b>#{selectedIdx + 1}</b> (Seed: {activeRender.seed})</span>
@@ -1779,6 +1937,7 @@ function Studio({ state, setState, onUpgrade, onHome }){
   const setFurniture = f => patch(p=>({furniture: typeof f==="function"?f(p.furniture):f}));
   const setMood = m => patch({mood:m});
   const setShop = sh => patch({shop:sh});
+  const setPhoto = ph => patch({photo:ph});
 
   const addProject = () => {
     if (!canCreate) { onUpgrade("project"); return; }
@@ -1810,8 +1969,8 @@ function Studio({ state, setState, onUpgrade, onHome }){
         {TABS.map(t=><button key={t} role="tab" aria-selected={tab===t} className={"atl-tab"+(tab===t?" on":"")} onClick={()=>setTab(t)}>{t}{t==="Export"&&!exportsUnlocked?" 🔒":""}</button>)}
       </div>
       <div className="atl-main">
-        <div style={{display:tab==="Brief"?"block":"none"}}><BriefPanel room={proj.room} setRoom={setRoom} prefs={proj.prefs} setPrefs={setPrefs} go={()=>setTab("Floor plan")}/></div>
-        <div style={{display:tab==="Floor plan"?"block":"none"}}><PlanPanel key={proj.id} room={proj.room} prefs={proj.prefs} furniture={proj.furniture} setFurniture={setFurniture} svgRef={svgRef}/></div>
+        <div style={{display:tab==="Brief"?"block":"none"}}><BriefPanel room={proj.room} setRoom={setRoom} prefs={proj.prefs} setPrefs={setPrefs} photo={proj.photo} setPhoto={setPhoto} go={()=>setTab("Floor plan")}/></div>
+        <div style={{display:tab==="Floor plan"?"block":"none"}}><PlanPanel key={proj.id} room={proj.room} prefs={proj.prefs} furniture={proj.furniture} setFurniture={setFurniture} photo={proj.photo} svgRef={svgRef}/></div>
         <div style={{display:tab==="Visualise"?"block":"none"}}><VisualisePanel key={proj.id} room={proj.room} prefs={proj.prefs} furniture={proj.furniture} mood={proj.mood} shop={proj.shop}/></div>
         <div style={{display:tab==="Mood board"?"block":"none"}}><MoodPanel room={proj.room} prefs={proj.prefs} mood={proj.mood} setMood={setMood}/></div>
         <div style={{display:tab==="Shopping"?"block":"none"}}><ShopPanel room={proj.room} prefs={proj.prefs} shop={proj.shop} setShop={setShop}/></div>
