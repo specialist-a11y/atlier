@@ -187,17 +187,27 @@ const r1 = v => Math.round(v * 10) / 10;
 const shopSearchUrl = (query) => `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(query)}`;
 
 /* ---------------- AI helpers ---------------- */
-async function fetchWithGemini(endpoint, options) {
-  let res;
-  try {
-    res = await fetch(`/api/gemini` + endpoint, options);
-  } catch (err) {
-    throw new Error("Couldn't reach the /api/gemini proxy — check your network connection or that the server is running.");
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function fetchWithGemini(endpoint, options, retries = 3) {
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try {
+      res = await fetch(`/api/gemini` + endpoint, options);
+    } catch (err) {
+      throw new Error("Couldn't reach the /api/gemini proxy — check your network connection or that the server is running.");
+    }
+    if (res.status === 404) {
+      throw new Error("Gemini proxy not found at /api/gemini — make sure api/gemini/[...path].js is deployed on this Vercel project.");
+    }
+    // Google's model is momentarily overloaded/rate-limited — back off and retry
+    // automatically instead of surfacing a transient blip as a hard failure.
+    if ((res.status === 503 || res.status === 429) && attempt < retries) {
+      await sleep(800 * Math.pow(2, attempt));
+      continue;
+    }
+    return res;
   }
-  if (res.status === 404) {
-    throw new Error("Gemini proxy not found at /api/gemini — make sure api/gemini/[...path].js is deployed on this Vercel project.");
-  }
-  return res;
 }
 
 async function askClaude(messages) {
