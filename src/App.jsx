@@ -439,7 +439,7 @@ function BriefPanel({ room, setRoom, prefs, setPrefs, photo, setPhoto, go }) {
       const [, mimeType, data] = match;
       const prompt = `You are a professional interior designer. Here is a photo of the client's CURRENT room, as it looks today.\n${roomBrief(room, prefs)}\n\nLooking at what's actually in the photo, give exactly 6 specific, prioritized recommendations to optimize this real room for the client's stated style, budget and household — cover things like clutter, furniture placement, traffic flow, lighting, colour/style mismatches, and storage. Reference what you can actually see. Respond with plain text, one recommendation per line, no numbering or markdown headers.`;
       const text = await askGeminiVision(prompt, data, mimeType, localStorage.getItem("atelier_gemini_key") || "");
-      setPhoto(p => ({ ...p, tips: text.trim() }));
+      setPhoto({ ...photo, tips: text.trim() });
     } catch (e) {
       setErr("Couldn't analyze this photo — try again. (" + e.message + ")");
     }
